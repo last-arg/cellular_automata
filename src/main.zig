@@ -5,112 +5,150 @@ const std = @import("std");
 const mem = std.mem;
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    // std.log.info("Starting Conway's game of life", .{});
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    var gol = try GameOfLife.init(gpa.allocator(), 7, 7);
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
+    var glider = [_][]const bool{
+        &.{false, true, false},
+        &.{false, false, true},
+        &.{true, true, true},
+    };
 
-    try game_of_life();
+    gol.set_grid_start(&glider);
 
+    try gol.print();
+    try gol.step();
+    defer gol.deinit();
 }
 
-const grid_size = 4; 
-const Grid = [grid_size][grid_size]u8;
-fn game_of_life() !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-    try stdout.print("Starting conway's game of life\n", .{});
+const GameOfLife = struct {
+    grid: std.ArrayList(bool),
+    width: u32,
+    height: u32,
+    allocator: mem.Allocator,
 
-    var grid_1 = mem.zeroes(Grid);
-    var grid_2 = mem.zeroes(Grid);
-    var active = &grid_1;
-    var inactive = &grid_2;
+    const Self = @This();
 
-    // Glider
-    grid_1[0][1] = 1;
-    grid_1[1][2] = 1;
-    grid_1[2][0] = 1;
-    grid_1[2][1] = 1;
-    grid_1[2][2] = 1;
-
-    try print_game_of_life(stdout, active);
-
-    const step_count = 10;
-    for (0..step_count) |_| {
-        active, inactive = try step_game_of_life(active, inactive);
+    pub fn init(allocator: mem.Allocator, width: u32, height: u32) !Self {
+        const total = width * height;
+        var grid = try std.ArrayList(bool).initCapacity(allocator, total);
+        for (0..total) |_| grid.appendAssumeCapacity(false);
+        return .{
+            .grid = grid,
+            .width = width,
+            .height = height,
+            .allocator = allocator,
+        };
     }
 
-    try stdout.writeAll("\n");
-    try print_game_of_life(stdout, active);
-
-    try bw.flush(); // Don't forget to flush!
-}
-
-fn row_sum(row: []const u8) u8 {
-    var sum: u8 = 0;
-    for (row) |val| {
-        sum += val;
+    pub fn set_grid_start(self: *Self, arr: [][]const bool) void {
+        for (0..arr.len) |row_index| {
+            for (arr[row_index], 0..) |col_value, col_index| {
+                self.grid.items[row_index * self.width + col_index] = col_value;
+            }
+        }
     }
-    return sum;
-}
 
-fn step_game_of_life(active: *Grid, out: *Grid) !struct{*Grid, *Grid} {
-    for (active, 0..) |row, i| {
-        for (row, 0..) |col, j| {
-            var sum: u8 = 0;
+    pub fn step(self: *Self) !void {
+        var buf_copy = try std.ArrayList(bool).initCapacity(self.allocator, self.width * self.height);
+        defer buf_copy.deinit();
+        buf_copy.appendSliceAssumeCapacity(self.grid.items);
 
-            var row_start = j;
-            if (j > 0) {
-                row_start -= 1;
-            }
-            var row_end: usize = j + 1;
-            if (j < row.len - 1) {
-                row_end += 1;
-            }
-
-            if (0 < i) {
-                const top = active[i-1][row_start..row_end];
-                sum += row_sum(top);
-            }
-
-            const middle = row[row_start..row_end];
-            sum += row_sum(middle);
-
-            if (i < grid_size - 1) {
-                const bottom = active[i+1][row_start..row_end];
-                sum += row_sum(bottom);
-            }
-            if (sum > 1) {
-                sum -= col;
-            }
-
-            if (col == 1) {
-                if (sum < 2 or sum > 3) {
-                    out[i][j] = 0;
-                } else {
-                    out[i][j] = 1;
+        for (0..self.height) |row_index| {
+            const row_start = row_index * self.width;
+            const top_row_opt = blk: {
+                if (row_index > 0) {
+                    const start = row_start - self.width;
+                    break :blk buf_copy.items[start..start + self.width];
                 }
-            } else if (col == 0 and sum == 3) {
-                out[i][j] = 1;
-            } else {
-                out[i][j] = col;
+                break :blk null;
+            };
+
+            const row = buf_copy.items[row_start..row_start + self.width];
+
+            const bottom_row_opt = blk: {
+                const bottom_index = row_index + 1; 
+                if (bottom_index < row.len) {
+                    const start = row_start + self.width;
+                    break :blk buf_copy.items[start..start + self.width];
+                }
+                break :blk null;
+            };
+
+
+            for (0..self.width) |col_index| {
+                var sum: u32 = 0;
+                if (top_row_opt) |top_row| {
+                    sum += sum_row_around_index(col_index, top_row);
+                }
+
+                sum += sum_row_around_index(col_index, row);
+
+                if (bottom_row_opt) |bottom_row| {
+                    sum += sum_row_around_index(col_index, bottom_row);
+                }
+
+                const col_value = row[col_index];
+                sum -= @intFromBool(col_value);
+
+                // std.debug.print("sum: {} | col: {}\n", .{sum, col_value});
+                const grid_index = row_index * self.width + col_index; 
+                if (col_value) {
+                    if (sum < 2 or sum > 3) {
+                        self.grid.items[grid_index] = false;
+                    } else {
+                        self.grid.items[grid_index] = true;
+                    }
+                } else if (!col_value) {
+                    if (sum == 3) {
+                        self.grid.items[grid_index] = true;
+                    } else {
+                        self.grid.items[grid_index] = col_value;
+                    }
+                }
             }
         }
     }
-    return .{out, active}; 
-}
 
-fn print_game_of_life(stdout: anytype, grid: *const Grid) !void {
-    for (grid) |row| {
-        for (row) |col| {
-            try stdout.print("{} ", .{col});
+    fn sum_row_around_index(index: usize, row: []bool) u32 {
+        const start = blk: {
+            if (index == 0) {
+                break :blk index;
+            }
+            break :blk index - 1;
+        };
+        const end = blk: {
+            const index_next = index + 2;
+            if (index_next >= row.len) {
+                break :blk row.len;
+            }
+            break :blk index_next;
+        };
+
+        var sum: u32 = 0;
+        // std.debug.print("sum: {any}\n", .{row[start..end]});
+        for (row[start..end]) |val| {
+            sum += @intFromBool(val);
         }
-        try stdout.print("\n", .{});
+        return sum;
     }
-}
+
+    pub fn print(self: *const Self) !void {
+        const writer = std.io.getStdOut().writer();
+        for (self.grid.items, 0..) |val, i| {
+            try writer.print("{} ", .{@intFromBool(val)});
+            if (@mod(i + 1, self.width) == 0) {
+                try writer.writeAll("\n");
+            }
+        }
+        try writer.writeAll("\n");
+    }
+
+    pub fn deinit(self: *const Self) void {
+        self.grid.deinit();
+    }
+};
 
 test "simple test" {
     var list = std.ArrayList(i32).init(std.testing.allocator);
