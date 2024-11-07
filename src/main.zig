@@ -27,6 +27,7 @@ fn game_of_life() !void {
     var grid_1 = mem.zeroes(Grid);
     var grid_2 = mem.zeroes(Grid);
     var active = &grid_1;
+    var inactive = &grid_2;
 
     // Glider
     grid_1[0][1] = 1;
@@ -37,7 +38,10 @@ fn game_of_life() !void {
 
     try print_game_of_life(stdout, active);
 
-    active = try step_game_of_life(active, &grid_2);
+    const step_count = 10;
+    for (0..step_count) |_| {
+        active, inactive = try step_game_of_life(active, inactive);
+    }
 
     try stdout.writeAll("\n");
     try print_game_of_life(stdout, active);
@@ -47,14 +51,13 @@ fn game_of_life() !void {
 
 fn row_sum(row: []const u8) u8 {
     var sum: u8 = 0;
-    std.debug.print("{any}\n", .{row});
     for (row) |val| {
         sum += val;
     }
     return sum;
 }
 
-fn step_game_of_life(active: *const Grid, out: *Grid) !*Grid {
+fn step_game_of_life(active: *Grid, out: *Grid) !struct{*Grid, *Grid} {
     for (active, 0..) |row, i| {
         for (row, 0..) |col, j| {
             var sum: u8 = 0;
@@ -97,7 +100,7 @@ fn step_game_of_life(active: *const Grid, out: *Grid) !*Grid {
             }
         }
     }
-    return out;
+    return .{out, active}; 
 }
 
 fn print_game_of_life(stdout: anytype, grid: *const Grid) !void {
