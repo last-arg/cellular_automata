@@ -18,8 +18,10 @@ pub fn main() !void {
 
     gol.set_grid_start(&glider);
 
-    try gol.print();
-    try gol.step();
+    for (0..20) |_| {
+        try gol.print();
+        try gol.step();
+    }
     try gol.print();
 
     defer gol.deinit();
