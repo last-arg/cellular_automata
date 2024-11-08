@@ -100,7 +100,7 @@ pub fn build(b: *std.Build) void {
     extract_example.addArg("Zjb"); // Name of js class.
     extract_example.addArtifactArg(example);
 
-    const example_step = b.step("example", "Build the hello Zig example");
+    const example_step = b.step("wasm", "Build the wasm");
     example_step.dependOn(&b.addInstallArtifact(example, .{
         .dest_dir = .{ .override = dir },
     }).step);
