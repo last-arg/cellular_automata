@@ -22,6 +22,7 @@ pub const GameOfLife = struct {
     }
 
     pub fn set_grid_start(self: *Self, arr: [][]const u8) void {
+        @memset(self.grid.items, 0);
         for (0..arr.len) |row_index| {
             for (arr[row_index], 0..) |col_value, col_index| {
                 self.grid.items[row_index * self.width + col_index] = col_value;

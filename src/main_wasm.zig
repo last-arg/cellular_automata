@@ -27,14 +27,6 @@ const Canvas = struct {
         var gol = GameOfLife.init(allocator, width, height) catch |e| zjb.throwError(e);
         errdefer gol.deinit();
 
-        var glider = [_][]const u8{
-            &.{0, 1, 0},
-            &.{0, 0, 1},
-            &.{1, 1, 1},
-        };
-
-        gol.set_grid_start(&glider);
-
         const c = zjb.global("document").call("getElementById", .{zjb.constString("canvas")}, zjb.Handle);
         defer c.release();
 
@@ -46,12 +38,29 @@ const Canvas = struct {
         var context = c.call("getContext", .{zjb.constString("2d")}, zjb.Handle);
         errdefer context.release();
                 
-        return .{
+        var r: @This() = .{
             .width = canvas_width,
             .height = canvas_height,
             .gol = gol,
             .context = context,
         };
+        r.reset();
+        return r;
+    }
+
+    pub fn reset(self: *@This()) void {
+        var glider = [_][]const u8{
+            &.{0, 1, 0},
+            &.{0, 0, 1},
+            &.{1, 1, 1},
+        };
+
+        self.gol.set_grid_start(&glider);
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.gol.deinit();
+        self.context.release();
     }
 
     pub fn render(self: *@This()) void {
@@ -100,6 +109,10 @@ export fn main() void {
     const button_next_step = zjb.global("document").call("getElementById", .{zjb.constString("canvas-next-step")}, zjb.Handle);
     defer button_next_step.release();
     button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("clickCallback", clickCallback) }, void);
+
+    const button_reset = zjb.global("document").call("getElementById", .{zjb.constString("canvas-reset")}, zjb.Handle);
+    defer button_reset.release();
+    button_reset.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("resetCallback", resetCallback) }, void);
 }
 
 fn clickCallback(event: zjb.Handle) callconv(.C) void {
@@ -109,6 +122,14 @@ fn clickCallback(event: zjb.Handle) callconv(.C) void {
         logStr("GameOfLife.step failed");
         zjb.throwError(e);
     };
+    canvas.render();
+}
+
+fn resetCallback(event: zjb.Handle) callconv(.C) void {
+    defer event.release();
+    // log("reset");
+
+    canvas.reset();
     canvas.render();
 }
 
