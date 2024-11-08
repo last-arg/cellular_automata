@@ -16,6 +16,8 @@ pub const panic = zjb.panic;
 export fn main() void {
     zjb.global("console").call("log", .{zjb.constString("Hello from Zig")}, void);
 
+    const cell_size = 30; 
+    const cell_size_i32: i32 = @intCast(cell_size); 
     var gol = GameOfLife.init(alloc, 7, 7) catch |e| zjb.throwError(e);
 
     var glider = [_][]const u8{
@@ -32,6 +34,7 @@ export fn main() void {
         defer obj.release();
         log(obj);
     }
+
     zjb.global("console").call("log", .{zjb.constString("Next step")}, void);
     gol.step() catch |e| zjb.throwError(e);
     for (0..gol.height) |row_index| {
@@ -42,6 +45,41 @@ export fn main() void {
         log(obj);
     }
 
+    logStr("\n============================= html canvas example =============================");
+    {
+        const canvas = zjb.global("document").call("getElementById", .{zjb.constString("canvas")}, zjb.Handle);
+        defer canvas.release();
+
+        const canvas_width: i32 = @intCast(cell_size * gol.width);
+        const canvas_height: i32 = @intCast(cell_size * gol.height);
+        canvas.set("width", canvas_width);
+        canvas.set("height", canvas_height);
+
+        const context = canvas.call("getContext", .{zjb.constString("2d")}, zjb.Handle);
+        defer context.release();
+
+        const live_color = zjb.constString("#16191d"); 
+        const dead_color = zjb.constString("#f8f9fa"); 
+
+        context.set("fillStyle", dead_color);
+        const canvas_start: i32 = 0;
+        const canvas_end: i32 = 0;
+        context.call("fillRect", .{ canvas_start, canvas_end, canvas_width, canvas_height }, void);
+
+        context.set("fillStyle", live_color);
+
+        for (0..gol.height) |row_index| {
+            const row_px: i32 = @intCast(row_index * cell_size);
+            for (0..gol.width) |col_index| {
+                const col_val = gol.grid.items[row_index * gol.width + col_index];
+                if (col_val == 1) {
+                    const col_px: i32 = @intCast(col_index * cell_size);
+                    context.call("fillRect", .{ col_px, row_px, cell_size_i32, cell_size_i32 }, void);
+                }
+            }
+        }
+    }
+    
     // {
     //     const formatted = std.fmt.allocPrint(alloc, "Runtime string: current timestamp {d}", .{zjb.global("Date").call("now", .{}, f32)}) catch |e| zjb.throwError(e);
     //     defer alloc.free(formatted);
@@ -127,46 +165,6 @@ export fn main() void {
     //     log(obj);
     // }
 
-    logStr("\n============================= html canvas example =============================");
-    {
-        const canvas = zjb.global("document").call("getElementById", .{zjb.constString("canvas")}, zjb.Handle);
-        defer canvas.release();
-
-        canvas.set("width", 153);
-        canvas.set("height", 140);
-        const w = canvas.get("width", f32);
-        log(w);
-
-        const context = canvas.call("getContext", .{zjb.constString("2d")}, zjb.Handle);
-        defer context.release();
-
-        context.set("fillStyle", zjb.constString("#F7A41D"));
-
-        // Zig logo by Zig Software Foundation, github.com/ziglang/logo
-        const shapes = [_][]const f64{
-            &[_]f64{ 46, 22, 28, 44, 19, 30 },
-            &[_]f64{ 46, 22, 33, 33, 28, 44, 22, 44, 22, 95, 31, 95, 20, 100, 12, 117, 0, 117, 0, 22 },
-            &[_]f64{ 31, 95, 12, 117, 4, 106 },
-
-            &[_]f64{ 56, 22, 62, 36, 37, 44 },
-            &[_]f64{ 56, 22, 111, 22, 111, 44, 37, 44, 56, 32 },
-            &[_]f64{ 116, 95, 97, 117, 90, 104 },
-            &[_]f64{ 116, 95, 100, 104, 97, 117, 42, 117, 42, 95 },
-            &[_]f64{ 150, 0, 52, 117, 3, 140, 101, 22 },
-
-            &[_]f64{ 141, 22, 140, 40, 122, 45 },
-            &[_]f64{ 153, 22, 153, 117, 106, 117, 120, 105, 125, 95, 131, 95, 131, 45, 122, 45, 132, 36, 141, 22 },
-            &[_]f64{ 125, 95, 130, 110, 106, 117 },
-        };
-
-        for (shapes) |shape| {
-            context.call("moveTo", .{ shape[0], shape[1] }, void);
-            for (1..shape.len / 2) |i| {
-                context.call("lineTo", .{ shape[2 * i], shape[2 * i + 1] }, void);
-            }
-            context.call("fill", .{}, void);
-        }
-    }
 
     // logStr("\n============================= Exporting functions (press a key for a callback) =============================");
     // zjb.global("document").call("addEventListener", .{ zjb.constString("keydown"), zjb.fnHandle("keydownCallback", keydownCallback) }, void);
