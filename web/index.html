@@ -3,18 +3,25 @@
 	<head>
 		<title>Making stuff</title>
 		<style>
-		div {
+		.main {
 			display: flex;
 			justify-content: center;
 		}
+
 		canvas {
 			border: 1px solid grey;
 		}
 		</style>
 	</head>
 	<body>
-		<div>
-			<canvas id="canvas" width="100" height="100"></canvas>
+		<div class=main>
+			<div class=container>
+				<canvas id="canvas" width="100" height="100"></canvas>
+				<div>
+					<button id="canvas-reset">Reset</button>
+					<button id="canvas-next-step">Next step</button>
+				</div>
+			</div>
 		</div>
 		<script src="zjb_extract.js"></script>
 		<script src="script.js"></script>
