@@ -7,12 +7,12 @@ const GameOfLife = @import("./lib.zig").GameOfLife;
 fn log(v: anytype) void {
     zjb.global("console").call("log", .{v}, void);
 }
+
 fn logStr(str: []const u8) void {
     const handle = zjb.string(str);
     defer handle.release();
     zjb.global("console").call("log", .{handle}, void);
 }
-
 
 const Canvas = struct {
     width: i32 = 100,
@@ -113,6 +113,47 @@ export fn main() void {
     const button_reset = zjb.global("document").call("getElementById", .{zjb.constString("canvas-reset")}, zjb.Handle);
     defer button_reset.release();
     button_reset.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("resetCallback", resetCallback) }, void);
+
+    const button_play_stop = zjb.global("document").call("getElementById", .{zjb.constString("canvas-play-stop")}, zjb.Handle);
+    defer button_play_stop.release();
+    button_play_stop.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("play_stop_cb", play_stop_cb) }, void);
+}
+
+var prev_time: f64 = 0.0;
+var time_step: f64 = 0.0;
+var is_playing = false;
+const frame_ms: f64 = 1000.0 / 2.0; 
+fn play_stop_cb(event: zjb.Handle) callconv(.C) void {
+    defer event.release();
+
+    if (is_playing) {
+        is_playing = false;
+        prev_time = 0.0;
+    } else {
+        is_playing = true;
+        prev_time = zjb.global("performance").call("now", .{}, f64);
+        zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", frame_cb) }, void);
+    }
+}
+
+fn frame_cb(time_ms: f64) callconv(.C) void {
+    if (!is_playing) {
+        return;
+    }
+    const lag = time_ms - prev_time;
+    prev_time = time_ms;
+    time_step += lag;
+    while (time_step >= frame_ms) {
+        canvas.gol.step() catch |e| {
+            logStr("GameOfLife.step failed");
+            zjb.throwError(e);
+        };
+        time_step -= frame_ms;
+    }
+
+    canvas.render();
+
+    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", frame_cb) }, void);
 }
 
 fn clickCallback(event: zjb.Handle) callconv(.C) void {
@@ -129,6 +170,7 @@ fn resetCallback(event: zjb.Handle) callconv(.C) void {
     defer event.release();
     // log("reset");
 
+    is_playing = false;
     canvas.reset();
     canvas.render();
 }
