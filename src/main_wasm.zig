@@ -123,7 +123,7 @@ export fn main() void {
     {
         const button_next_step = zjb.global("document").call("getElementById", .{zjb.constString("infinite-next-step")}, zjb.Handle);
         defer button_next_step.release();
-        button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("infinite-next-step-cb", infinite_next_step_cb) }, void);
+        button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("infinite_next_step_cb", infinite_next_step_cb) }, void);
 
         const button_play_stop = zjb.global("document").call("getElementById", .{zjb.constString("infinite-play-stop")}, zjb.Handle);
         defer button_play_stop.release();
@@ -168,15 +168,19 @@ fn finite_frame_cb(time_ms: f64) callconv(.C) void {
     const lag = time_ms - prev_time;
     prev_time = time_ms;
     time_step += lag;
+    var do_render = false;
     while (time_step >= frame_ms) {
         canvas.gol.step() catch |e| {
             logStr("GameOfLife.step failed");
             zjb.throwError(e);
         };
         time_step -= frame_ms;
+        do_render = true;
     }
 
-    canvas.render();
+    if (do_render) {
+        canvas.render();
+    }
 
     zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", finite_frame_cb) }, void);
 }
@@ -188,17 +192,31 @@ fn infinite_frame_cb(time_ms: f64) callconv(.C) void {
     const lag = time_ms - prev_time;
     prev_time = time_ms;
     time_step += lag;
+    var do_render = false;
     while (time_step >= frame_ms) {
         canvas.gol.step_wrap() catch |e| {
             logStr("GameOfLife.step failed");
             zjb.throwError(e);
         };
         time_step -= frame_ms;
+        do_render = true;
     }
 
-    canvas.render();
+    if (do_render) {
+        canvas.render();
+    }
 
-    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", finite_frame_cb) }, void);
+    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("infinte_frame_cb", infinite_frame_cb) }, void);
+}
+
+fn clickCallback(event: zjb.Handle) callconv(.C) void {
+    defer event.release();
+
+    canvas.gol.step() catch |e| {
+        logStr("GameOfLife.step failed");
+        zjb.throwError(e);
+    };
+    canvas.render();
 }
 
 fn infinite_next_step_cb(event: zjb.Handle) callconv(.C) void {
@@ -214,7 +232,7 @@ fn infinite_next_step_cb(event: zjb.Handle) callconv(.C) void {
 fn infinite_next(event: zjb.Handle) callconv(.C) void {
     defer event.release();
 
-    canvas.gol.step() catch |e| {
+    canvas.gol.step_wrap() catch |e| {
         logStr("GameOfLife.step failed");
         zjb.throwError(e);
     };
