@@ -18,9 +18,9 @@ pub fn main() !void {
 
     gol.set_grid_start(&glider);
 
-    for (0..20) |_| {
+    for (0..29) |_| {
         try gol.print();
-        try gol.step();
+        try gol.step_wrap();
     }
     try gol.print();
 

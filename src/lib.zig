@@ -30,6 +30,87 @@ pub const GameOfLife = struct {
         }
     }
 
+    pub fn step_wrap(self: *Self) !void {
+        var buf_copy = try std.ArrayList(u8).initCapacity(self.allocator, self.width * self.height);
+        defer buf_copy.deinit();
+        buf_copy.appendSliceAssumeCapacity(self.grid.items);
+
+        for (0..self.height) |row_index| {
+            const row_start = row_index * self.width;
+            const row_top = blk: {
+                if (row_index == 0) {
+                    break :blk buf_copy.items[buf_copy.items.len - self.width..];
+                }
+                const prev_start = row_start - self.width;
+                break :blk buf_copy.items[prev_start..row_start];
+            };
+
+            const row_current = buf_copy.items[row_start..row_start + self.width];
+
+            const row_bottom = blk: {
+                if (row_index == self.height - 1) {
+                    break :blk buf_copy.items[0..self.width];
+                }
+                const next_start = row_start + self.width;
+                break :blk buf_copy.items[next_start..next_start + self.width];
+            };
+
+            for (0..self.width) |col_index| {
+                var sum = sum_row_wrap(col_index, row_top);
+                sum += sum_row_wrap(col_index, row_current);
+                sum += sum_row_wrap(col_index, row_bottom);
+                const col_value = row_current[col_index];
+                sum -= col_value;
+
+                const grid_index = row_index * self.width + col_index; 
+                if (col_value == 1) {
+                    if (sum < 2 or sum > 3) {
+                        self.grid.items[grid_index] = 0;
+                    } else {
+                        self.grid.items[grid_index] = 1;
+                    }
+                } else if (col_value == 0) {
+                    if (sum == 3) {
+                        self.grid.items[grid_index] = 1;
+                    } else {
+                        self.grid.items[grid_index] = col_value;
+                    }
+                } else {
+                    unreachable;
+                }
+            }
+        }
+    }
+
+    fn sum_row_wrap(index: usize, row: []u8) u32 {
+        var buf: [3]u8 = undefined;
+        const prev_index = blk: {
+            if (index == 0) {
+                break :blk row.len - 1;
+            }
+            break :blk index - 1;
+        };
+        buf[0] = row[prev_index];
+
+        buf[1] = row[index];
+
+        const next_index = blk: {
+            const index_next = index + 1;
+            if (index_next >= row.len) {
+                break :blk 0;
+            }
+            break :blk index_next;
+        };
+        buf[2] = row[next_index];
+        // std.debug.print("{any}\n", .{buf});
+
+        var sum: u32 = 0;
+        for (buf) |val| {
+            sum += val;
+        }
+        return sum;
+    }
+
     pub fn step(self: *Self) !void {
         var buf_copy = try std.ArrayList(u8).initCapacity(self.allocator, self.width * self.height);
         defer buf_copy.deinit();

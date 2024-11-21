@@ -106,24 +106,36 @@ export fn main() void {
     canvas = Canvas.init(alloc, 7, 7);
     canvas.render();
 
-    const button_next_step = zjb.global("document").call("getElementById", .{zjb.constString("canvas-next-step")}, zjb.Handle);
-    defer button_next_step.release();
-    button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("clickCallback", clickCallback) }, void);
-
     const button_reset = zjb.global("document").call("getElementById", .{zjb.constString("canvas-reset")}, zjb.Handle);
     defer button_reset.release();
     button_reset.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("resetCallback", resetCallback) }, void);
 
-    const button_play_stop = zjb.global("document").call("getElementById", .{zjb.constString("canvas-play-stop")}, zjb.Handle);
-    defer button_play_stop.release();
-    button_play_stop.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("play_stop_cb", play_stop_cb) }, void);
+    {
+        const button_next_step = zjb.global("document").call("getElementById", .{zjb.constString("canvas-next-step")}, zjb.Handle);
+        defer button_next_step.release();
+        button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("clickCallback", clickCallback) }, void);
+
+        const button_play_stop = zjb.global("document").call("getElementById", .{zjb.constString("canvas-play-stop")}, zjb.Handle);
+        defer button_play_stop.release();
+        button_play_stop.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("play_stop_cb", finite_play_stop_cb) }, void);
+    }
+
+    {
+        const button_next_step = zjb.global("document").call("getElementById", .{zjb.constString("infinite-next-step")}, zjb.Handle);
+        defer button_next_step.release();
+        button_next_step.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("infinite-next-step-cb", infinite_next_step_cb) }, void);
+
+        const button_play_stop = zjb.global("document").call("getElementById", .{zjb.constString("infinite-play-stop")}, zjb.Handle);
+        defer button_play_stop.release();
+        button_play_stop.call("addEventListener", .{ zjb.constString("click"), zjb.fnHandle("infinite_play_stop_cb", infinite_play_stop_cb) }, void);
+    }
 }
 
 var prev_time: f64 = 0.0;
 var time_step: f64 = 0.0;
 var is_playing = false;
 const frame_ms: f64 = 1000.0 / 2.0; 
-fn play_stop_cb(event: zjb.Handle) callconv(.C) void {
+fn finite_play_stop_cb(event: zjb.Handle) callconv(.C) void {
     defer event.release();
 
     if (is_playing) {
@@ -132,11 +144,24 @@ fn play_stop_cb(event: zjb.Handle) callconv(.C) void {
     } else {
         is_playing = true;
         prev_time = zjb.global("performance").call("now", .{}, f64);
-        zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", frame_cb) }, void);
+        zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", finite_frame_cb) }, void);
     }
 }
 
-fn frame_cb(time_ms: f64) callconv(.C) void {
+fn infinite_play_stop_cb(event: zjb.Handle) callconv(.C) void {
+    defer event.release();
+
+    if (is_playing) {
+        is_playing = false;
+        prev_time = 0.0;
+    } else {
+        is_playing = true;
+        prev_time = zjb.global("performance").call("now", .{}, f64);
+        zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("infinite_frame_cb", infinite_frame_cb) }, void);
+    }
+}
+
+fn finite_frame_cb(time_ms: f64) callconv(.C) void {
     if (!is_playing) {
         return;
     }
@@ -153,10 +178,40 @@ fn frame_cb(time_ms: f64) callconv(.C) void {
 
     canvas.render();
 
-    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", frame_cb) }, void);
+    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", finite_frame_cb) }, void);
 }
 
-fn clickCallback(event: zjb.Handle) callconv(.C) void {
+fn infinite_frame_cb(time_ms: f64) callconv(.C) void {
+    if (!is_playing) {
+        return;
+    }
+    const lag = time_ms - prev_time;
+    prev_time = time_ms;
+    time_step += lag;
+    while (time_step >= frame_ms) {
+        canvas.gol.step_wrap() catch |e| {
+            logStr("GameOfLife.step failed");
+            zjb.throwError(e);
+        };
+        time_step -= frame_ms;
+    }
+
+    canvas.render();
+
+    zjb.global("window").call("requestAnimationFrame", .{ zjb.fnHandle("frame_cb", finite_frame_cb) }, void);
+}
+
+fn infinite_next_step_cb(event: zjb.Handle) callconv(.C) void {
+    defer event.release();
+
+    canvas.gol.step_wrap() catch |e| {
+        logStr("GameOfLife.step failed");
+        zjb.throwError(e);
+    };
+    canvas.render();
+}
+
+fn infinite_next(event: zjb.Handle) callconv(.C) void {
     defer event.release();
 
     canvas.gol.step() catch |e| {
