@@ -3,6 +3,7 @@ const mem = std.mem;
 
 pub const GameOfLife = struct {
     grid: std.ArrayList(u8),
+    grid_buffer: std.ArrayList(u8),
     width: u32,
     height: u32,
     allocator: mem.Allocator,
@@ -12,9 +13,13 @@ pub const GameOfLife = struct {
     pub fn init(allocator: mem.Allocator, width: u32, height: u32) !Self {
         const total = width * height;
         var grid = try std.ArrayList(u8).initCapacity(allocator, total);
+        errdefer grid.deinit();
         for (0..total) |_| grid.appendAssumeCapacity(0);
+        var grid_buffer = try std.ArrayList(u8).initCapacity(allocator, total);
+        grid_buffer.appendSliceAssumeCapacity(grid.items);
         return .{
             .grid = grid,
+            .grid_buffer = grid_buffer,
             .width = width,
             .height = height,
             .allocator = allocator,
@@ -31,28 +36,27 @@ pub const GameOfLife = struct {
     }
 
     pub fn step_wrap(self: *Self) !void {
-        var buf_copy = try std.ArrayList(u8).initCapacity(self.allocator, self.width * self.height);
-        defer buf_copy.deinit();
-        buf_copy.appendSliceAssumeCapacity(self.grid.items);
+        var active = self.grid;
+        var inactive = self.grid_buffer;
 
         for (0..self.height) |row_index| {
             const row_start = row_index * self.width;
             const row_top = blk: {
                 if (row_index == 0) {
-                    break :blk buf_copy.items[buf_copy.items.len - self.width..];
+                    break :blk active.items[active.items.len - self.width..];
                 }
                 const prev_start = row_start - self.width;
-                break :blk buf_copy.items[prev_start..row_start];
+                break :blk active.items[prev_start..row_start];
             };
 
-            const row_current = buf_copy.items[row_start..row_start + self.width];
+            const row_current = active.items[row_start..row_start + self.width];
 
             const row_bottom = blk: {
                 if (row_index == self.height - 1) {
-                    break :blk buf_copy.items[0..self.width];
+                    break :blk active.items[0..self.width];
                 }
                 const next_start = row_start + self.width;
-                break :blk buf_copy.items[next_start..next_start + self.width];
+                break :blk active.items[next_start..next_start + self.width];
             };
 
             for (0..self.width) |col_index| {
@@ -65,21 +69,23 @@ pub const GameOfLife = struct {
                 const grid_index = row_index * self.width + col_index; 
                 if (col_value == 1) {
                     if (sum < 2 or sum > 3) {
-                        self.grid.items[grid_index] = 0;
+                        inactive.items[grid_index] = 0;
                     } else {
-                        self.grid.items[grid_index] = 1;
+                        inactive.items[grid_index] = 1;
                     }
                 } else if (col_value == 0) {
                     if (sum == 3) {
-                        self.grid.items[grid_index] = 1;
+                        inactive.items[grid_index] = 1;
                     } else {
-                        self.grid.items[grid_index] = col_value;
+                        inactive.items[grid_index] = col_value;
                     }
                 } else {
                     unreachable;
                 }
             }
         }
+        self.grid = inactive;
+        self.grid_buffer = active;
     }
 
     fn sum_row_wrap(index: usize, row: []u8) u32 {
@@ -112,27 +118,26 @@ pub const GameOfLife = struct {
     }
 
     pub fn step(self: *Self) !void {
-        var buf_copy = try std.ArrayList(u8).initCapacity(self.allocator, self.width * self.height);
-        defer buf_copy.deinit();
-        buf_copy.appendSliceAssumeCapacity(self.grid.items);
+        var active = self.grid;
+        var inactive = self.grid_buffer;
 
         for (0..self.height) |row_index| {
             const row_start = row_index * self.width;
             const top_row_opt = blk: {
                 if (row_index > 0) {
                     const start = row_start - self.width;
-                    break :blk buf_copy.items[start..start + self.width];
+                    break :blk active.items[start..start + self.width];
                 }
                 break :blk null;
             };
 
-            const row = buf_copy.items[row_start..row_start + self.width];
+            const row = active.items[row_start..row_start + self.width];
 
             const bottom_row_opt = blk: {
                 const bottom_index = row_index + 1; 
                 if (bottom_index < row.len) {
                     const start = row_start + self.width;
-                    break :blk buf_copy.items[start..start + self.width];
+                    break :blk active.items[start..start + self.width];
                 }
                 break :blk null;
             };
@@ -157,21 +162,23 @@ pub const GameOfLife = struct {
                 const grid_index = row_index * self.width + col_index; 
                 if (col_value == 1) {
                     if (sum < 2 or sum > 3) {
-                        self.grid.items[grid_index] = 0;
+                        inactive.items[grid_index] = 0;
                     } else {
-                        self.grid.items[grid_index] = 1;
+                        inactive.items[grid_index] = 1;
                     }
                 } else if (col_value == 0) {
                     if (sum == 3) {
-                        self.grid.items[grid_index] = 1;
+                        inactive.items[grid_index] = 1;
                     } else {
-                        self.grid.items[grid_index] = col_value;
+                        inactive.items[grid_index] = col_value;
                     }
                 } else {
                     unreachable;
                 }
             }
         }
+        self.grid = inactive;
+        self.grid_buffer = active;
     }
 
     fn sum_row_around_index(index: usize, row: []u8) u32 {
