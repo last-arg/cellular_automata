@@ -1,3 +1,6 @@
+Exploring cellular automata:
+- Conway's Game of Life
+- Elementary Cellular Automata
 
 Zig wasm libraries to consider:
 - https://github.com/peterhellberg/art-init
