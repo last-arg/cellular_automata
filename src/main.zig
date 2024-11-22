@@ -16,13 +16,9 @@ fn elementay_cellular_automata() !void {
     defer _ = gpa.deinit();
     var ca = try ElementaryCA.init(gpa.allocator(), .{
         // .row_length = 19
+        .rule = 222
     });
     defer ca.deinit();
-
-    // const len = ca.row.items.len;
-    // const middle = @divFloor(len, 2);
-    // ca.row.items[middle] = 1;
-    // std.debug.print("{b}\n", .{222});
 
     for (0..9) |_| {
         try ca.print();

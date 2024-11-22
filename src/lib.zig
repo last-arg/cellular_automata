@@ -236,11 +236,15 @@ pub const GameOfLife = struct {
 pub const ElementaryCA = struct {
     row: std.ArrayList(u8),
     row_buffer: std.ArrayList(u8),
+    ruleset: [8]u8 = .{0} ** 8,
+    // rule 222
+    // [_]u8{1,1,0,1,1,1,1,0};
 
     const Self = @This();
     const Options = struct{
         row_length: u32 = 11,
         init_live_cell_indexes: []const u32 = &.{5},
+        rule: u8 = 0,
     };
 
     pub fn init(allocator: mem.Allocator, opts: Options) !Self {
@@ -253,18 +257,23 @@ pub const ElementaryCA = struct {
             } 
             row.appendAssumeCapacity(val);
         }
-        std.debug.print("{any}\n", .{row.items});
         var row_buffer = try std.ArrayList(u8).initCapacity(allocator, row.items.len);
         row_buffer.appendSliceAssumeCapacity(row.items);
-        return .{
+        var self: Self = .{
             .row = row,
             .row_buffer = row_buffer,
         };
+        self.set_rule(opts.rule);
+        return self;
     }
 
-    // rule 222
-    const ruleset = [_]u8{1,1,0,1,1,1,1,0};
-    // const ruleset = [_]u8{0,1,1,1,1,0,1,1};
+    fn set_rule(self: *Self, rule_val: u8) void {
+        const last_index = self.ruleset.len - 1;
+        for (0..self.ruleset.len) |i| {
+            self.ruleset[last_index - i] = (rule_val >> @intCast(i)) & 1;
+        }
+    }
+
     pub fn next_generation(self: *Self) !void {
         const active = self.row.items;
         const inactive = self.row_buffer;
@@ -275,23 +284,23 @@ pub const ElementaryCA = struct {
             state |= value << 1;
             state |= active[index_next];
             // std.debug.print("{b}\n", .{state});
-            inactive.items[i] = rule(state);
+            inactive.items[i] = self.rule(state);
         }
 
         self.row_buffer = self.row;
         self.row = inactive;
     }
 
-    fn rule(val: u8) u8 {
+    fn rule(self: *const Self, val: u8) u8 {
         // std.debug.print("val: {d} {} {b}\n", .{val, val == 0b011, val});
-        if (val == 0b111) return ruleset[0];
-        if (val == 0b110) return ruleset[1];
-        if (val == 0b101) return ruleset[2];
-        if (val == 0b100) return ruleset[3];
-        if (val == 0b011) return ruleset[4];
-        if (val == 0b010) return ruleset[5];
-        if (val == 0b001) return ruleset[6];
-        if (val == 0b000) return ruleset[7];
+        if (val == 0b111) return self.ruleset[0];
+        if (val == 0b110) return self.ruleset[1];
+        if (val == 0b101) return self.ruleset[2];
+        if (val == 0b100) return self.ruleset[3];
+        if (val == 0b011) return self.ruleset[4];
+        if (val == 0b010) return self.ruleset[5];
+        if (val == 0b001) return self.ruleset[6];
+        if (val == 0b000) return self.ruleset[7];
         @panic("messed up rule getting rule");
     }
 
