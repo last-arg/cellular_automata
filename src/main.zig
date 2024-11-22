@@ -3,9 +3,35 @@
 //! is to delete this file and start with root.zig instead.
 const std = @import("std");
 const mem = std.mem;
-const GameOfLife = @import("./lib.zig").GameOfLife;
+const lib = @import("./lib.zig");
+const GameOfLife = lib.GameOfLife;
+const ElementaryCA = lib.ElementaryCA;
 
 pub fn main() !void {
+    try elementay_cellular_automata();
+}
+
+fn elementay_cellular_automata() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    var ca = try ElementaryCA.init(gpa.allocator(), .{
+        // .row_length = 19
+    });
+    defer ca.deinit();
+
+    // const len = ca.row.items.len;
+    // const middle = @divFloor(len, 2);
+    // ca.row.items[middle] = 1;
+    // std.debug.print("{b}\n", .{222});
+
+    for (0..9) |_| {
+        try ca.print();
+        try ca.next_generation();
+    }
+    try ca.print();
+}
+
+pub fn game_of_life() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var gol = try GameOfLife.init(gpa.allocator(), 7, 7);

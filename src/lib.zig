@@ -232,3 +232,79 @@ pub const GameOfLife = struct {
         self.grid.deinit();
     }
 };
+
+pub const ElementaryCA = struct {
+    row: std.ArrayList(u8),
+    row_buffer: std.ArrayList(u8),
+
+    const Self = @This();
+    const Options = struct{
+        row_length: u32 = 11,
+        init_live_cell_indexes: []const u32 = &.{5},
+    };
+
+    pub fn init(allocator: mem.Allocator, opts: Options) !Self {
+        var row = try std.ArrayList(u8).initCapacity(allocator, opts.row_length);
+        errdefer row.deinit();
+        for (0..opts.row_length) |i| {
+            var val: u8 = 0;
+            if (mem.indexOfScalar(u32, opts.init_live_cell_indexes, @intCast(i))) |_| {
+                val = 1;
+            } 
+            row.appendAssumeCapacity(val);
+        }
+        std.debug.print("{any}\n", .{row.items});
+        var row_buffer = try std.ArrayList(u8).initCapacity(allocator, row.items.len);
+        row_buffer.appendSliceAssumeCapacity(row.items);
+        return .{
+            .row = row,
+            .row_buffer = row_buffer,
+        };
+    }
+
+    // rule 222
+    const ruleset = [_]u8{1,1,0,1,1,1,1,0};
+    // const ruleset = [_]u8{0,1,1,1,1,0,1,1};
+    pub fn next_generation(self: *Self) !void {
+        const active = self.row.items;
+        const inactive = self.row_buffer;
+        for (active, 0..) |value, i| {
+            const index_prev = (i + active.len - 1) % active.len;
+            const index_next = (i + active.len + 1) % active.len;
+            var state: u8 = active[index_prev] << 2;
+            state |= value << 1;
+            state |= active[index_next];
+            // std.debug.print("{b}\n", .{state});
+            inactive.items[i] = rule(state);
+        }
+
+        self.row_buffer = self.row;
+        self.row = inactive;
+    }
+
+    fn rule(val: u8) u8 {
+        // std.debug.print("val: {d} {} {b}\n", .{val, val == 0b011, val});
+        if (val == 0b111) return ruleset[0];
+        if (val == 0b110) return ruleset[1];
+        if (val == 0b101) return ruleset[2];
+        if (val == 0b100) return ruleset[3];
+        if (val == 0b011) return ruleset[4];
+        if (val == 0b010) return ruleset[5];
+        if (val == 0b001) return ruleset[6];
+        if (val == 0b000) return ruleset[7];
+        @panic("messed up rule getting rule");
+    }
+
+    pub fn print(self: *const Self) !void {
+        var writer = std.io.getStdOut().writer();
+        for (self.row.items) |value| {
+            try writer.print("{d} ", .{value});
+        }
+        try writer.writeAll("\n");
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.row.deinit();
+        self.row_buffer.deinit();
+    }
+};
